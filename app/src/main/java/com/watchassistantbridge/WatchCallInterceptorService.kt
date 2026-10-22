@@ -29,15 +29,11 @@ class WatchCallInterceptorService : CallRedirectionService() {
 
         Log.d(TAG, "trigger number matched, cancelling call (assistant in ${settings.delayMs}ms)")
         cancelCall()
-        try {
-            AudioAssistantBridge.wakeUpScreen(applicationContext)
-            Handler(Looper.getMainLooper()).postDelayed(
-                { AudioAssistantBridge.startScoAndLaunchAssistant(applicationContext) },
-                settings.delayMs,
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "failed to schedule assistant after cancelling call", e)
-        }
+        AudioAssistantBridge.wakeUpScreen(applicationContext)
+        Handler(Looper.getMainLooper()).postDelayed(
+            { AudioAssistantBridge.startScoAndLaunchAssistant(applicationContext) },
+            settings.delayMs,
+        )
     }
 
     private fun shouldIntercept(settings: BridgeSettings, handle: Uri): Boolean =
