@@ -35,5 +35,10 @@
                 <action android:name="android.telecom.CallRedirectionService" />
             </intent-filter>
         </service>
+
+        <service
+            android:name=".AssistantSessionService"
+            android:exported="false"
+            android:foregroundServiceType="shortService" />
     </application>
 </manifest>

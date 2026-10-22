@@ -51,6 +51,7 @@ object AudioAssistantBridge {
         val audio = app.getSystemService(AudioManager::class.java)
         Log.d(TAG, "session start: forceSco=${settings.forceScoAudio} timeout=${settings.scoTimeoutSeconds}s")
 
+        AssistantSessionService.start(app)
         audio.mode = AudioManager.MODE_IN_COMMUNICATION
         val release = Runnable {
             Log.d(TAG, "session timeout reached")
@@ -84,6 +85,7 @@ object AudioAssistantBridge {
     fun releaseAudio(context: Context) {
         cancelPending()
         stopKeepAlive()
+        AssistantSessionService.stop(context.applicationContext)
         val audio = context.applicationContext.getSystemService(AudioManager::class.java)
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
