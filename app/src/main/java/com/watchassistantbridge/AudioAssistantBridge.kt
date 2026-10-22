@@ -5,8 +5,11 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.media.AudioAttributes
 import android.media.AudioDeviceInfo
+import android.media.AudioFormat
 import android.media.AudioManager
+import android.media.AudioTrack
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -19,10 +22,12 @@ object AudioAssistantBridge {
     private const val TAG = "WatchBridge"
     private const val WAKE_LOCK_TIMEOUT_MS = 10_000L
     private const val SCO_FALLBACK_MS = 1200L
+    private const val KEEP_ALIVE_SAMPLE_RATE = 8000
 
     private val handler = Handler(Looper.getMainLooper())
     private var pendingRelease: Runnable? = null
     private var scoWait: ScoWait? = null
+    private var keepAlive: AudioTrack? = null
 
     @Suppress("DEPRECATION")
     fun wakeUpScreen(context: Context) {
@@ -59,6 +64,7 @@ object AudioAssistantBridge {
             launchAssistant(app)
             return
         }
+        startKeepAlive()
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 routeToScoDevice(audio)
@@ -77,6 +83,7 @@ object AudioAssistantBridge {
     @Suppress("DEPRECATION")
     fun releaseAudio(context: Context) {
         cancelPending()
+        stopKeepAlive()
         val audio = context.applicationContext.getSystemService(AudioManager::class.java)
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -97,6 +104,51 @@ object AudioAssistantBridge {
         pendingRelease?.let { handler.removeCallbacks(it) }
         pendingRelease = null
         scoWait?.cancel()
+    }
+
+    // AudioService resets MODE_IN_COMMUNICATION (and drops our SCO route) about 6 s after the mode
+    // owner stops playing or recording. The assistant records under its own uid, so a looping
+    // silent voice-call track keeps this app the active mode owner until the session ends.
+    private fun startKeepAlive() {
+        if (keepAlive != null) return
+        try {
+            val samples = KEEP_ALIVE_SAMPLE_RATE
+            val track = AudioTrack.Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build(),
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(KEEP_ALIVE_SAMPLE_RATE)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build(),
+                )
+                .setTransferMode(AudioTrack.MODE_STATIC)
+                .setBufferSizeInBytes(samples * 2)
+                .build()
+            track.write(ShortArray(samples), 0, samples)
+            track.setLoopPoints(0, samples, -1)
+            track.play()
+            keepAlive = track
+            Log.d(TAG, "silent keep-alive track playing")
+        } catch (e: Exception) {
+            Log.w(TAG, "keep-alive track failed; audio mode may reset early", e)
+        }
+    }
+
+    private fun stopKeepAlive() {
+        val track = keepAlive ?: return
+        keepAlive = null
+        try {
+            track.stop()
+        } catch (e: IllegalStateException) {
+            Log.w(TAG, "keep-alive stop failed", e)
+        }
+        track.release()
     }
 
     private fun routeToScoDevice(audio: AudioManager) {
@@ -150,6 +202,8 @@ object AudioAssistantBridge {
         fun cancel() = finish(launch = false)
 
         override fun onReceive(context: Context, intent: Intent) {
+            // The broadcast is sticky; the replayed state is from before startBluetoothSco().
+            if (isInitialStickyBroadcast) return
             val state = intent.getIntExtra(AudioManager.EXTRA_SCO_AUDIO_STATE, -1)
             if (state == AudioManager.SCO_AUDIO_STATE_CONNECTED) {
                 Log.d(TAG, "SCO connected")
