@@ -10,6 +10,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,9 +20,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.watchassistantbridge.BridgeSettings
+import kotlin.math.roundToInt
 
 @Composable
 fun SettingsSection(settings: BridgeSettings, onChange: ((BridgeSettings) -> BridgeSettings) -> Unit) {
@@ -42,7 +45,7 @@ fun SettingsSection(settings: BridgeSettings, onChange: ((BridgeSettings) -> Bri
             )
 
             SliderSetting(
-                label = "HFP Kapanma Gecikmesi (ms)",
+                label = "HFP Kapanma Gecikmesi",
                 value = settings.delayMs.toFloat(),
                 range = BridgeSettings.DELAY_RANGE.first.toFloat()..BridgeSettings.DELAY_RANGE.last.toFloat(),
                 steps = ((BridgeSettings.DELAY_RANGE.last - BridgeSettings.DELAY_RANGE.first) / BridgeSettings.DELAY_STEP - 1).toInt(),
@@ -58,13 +61,13 @@ fun SettingsSection(settings: BridgeSettings, onChange: ((BridgeSettings) -> Bri
             }
 
             SliderSetting(
-                label = "SCO Kanalı Otomatik Kapanma Süresi (sn)",
+                label = "SCO Kanalı Otomatik Kapanma Süresi",
                 value = settings.scoTimeoutSeconds.toFloat(),
                 range = BridgeSettings.SCO_TIMEOUT_RANGE.first.toFloat()..BridgeSettings.SCO_TIMEOUT_RANGE.last.toFloat(),
                 steps = BridgeSettings.SCO_TIMEOUT_RANGE.last - BridgeSettings.SCO_TIMEOUT_RANGE.first - 1,
                 unit = "sn",
                 hint = null,
-                onCommit = { v -> onChange { it.copy(scoTimeoutSeconds = v.toInt()) } },
+                onCommit = { v -> onChange { it.copy(scoTimeoutSeconds = v) } },
             )
         }
     }
@@ -87,17 +90,18 @@ private fun SliderSetting(
     steps: Int,
     unit: String,
     hint: String?,
-    onCommit: (Float) -> Unit,
+    onCommit: (Int) -> Unit,
 ) {
     var dragged by remember(value) { mutableFloatStateOf(value) }
     Column {
-        Text("$label: ${dragged.toInt()} $unit", style = MaterialTheme.typography.bodyLarge)
+        Text("$label: ${dragged.roundToInt()} $unit", style = MaterialTheme.typography.bodyLarge)
         Slider(
             value = dragged,
             onValueChange = { dragged = it },
-            onValueChangeFinished = { onCommit(dragged) },
+            onValueChangeFinished = { onCommit(dragged.roundToInt()) },
             valueRange = range,
             steps = steps,
+            colors = SliderDefaults.colors(activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent),
         )
         if (hint != null) Text(hint, style = MaterialTheme.typography.bodySmall)
     }
